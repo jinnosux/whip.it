@@ -1,0 +1,14 @@
+# compiled binaries
+/whip
+/whipd
+/WhipIt
+
+# assembled app bundle (produced by build.sh)
+*.app/
+
+# generated icon (regenerated from 💥 by build.sh)
+AppIcon.icns
+AppIcon.iconset/
+
+# macOS cruft
+.DS_Store
