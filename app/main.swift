@@ -11,8 +11,9 @@ let kSensNotif = "com.jinnosuke.whip.sensitivity"
 let kEnableNotif = "com.jinnosuke.whip.enabled"
 let kDefaultsSensitivity = "sensitivity"
 let kDefaultsEnabled = "enabled"
+let kDaemonPlist = "/Library/LaunchDaemons/com.jinnosuke.whip.plist"
 
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var statusItem: NSStatusItem!
     var slapToken: Int32 = 0
     var enabled = true
@@ -21,6 +22,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let soundURL = Bundle.main.url(forResource: "whip", withExtension: "mp3")
     var slider: NSSlider!
     var sliderLabel: NSTextField!
+    var installItem: NSMenuItem!
+    var uninstallItem: NSMenuItem!
 
     func applicationDidFinishLaunching(_ note: Notification) {
         let d = UserDefaults.standard
@@ -52,6 +55,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // ---- menu ----
     func buildMenu() {
         let menu = NSMenu()
+        menu.autoenablesItems = false   // we manage install/uninstall enabled state ourselves
+        menu.delegate = self            // refresh service state each time the menu opens
 
         let toggle = NSMenuItem(title: "Enabled", action: #selector(toggleEnabled), keyEquivalent: "")
         toggle.target = self
@@ -87,12 +92,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         updateSliderLabel()
 
         menu.addItem(.separator())
-        let install = NSMenuItem(title: "Install Background Service…", action: #selector(installService), keyEquivalent: "")
-        install.target = self
-        menu.addItem(install)
-        let uninstall = NSMenuItem(title: "Uninstall Background Service…", action: #selector(uninstallService), keyEquivalent: "")
-        uninstall.target = self
-        menu.addItem(uninstall)
+        installItem = NSMenuItem(title: "Install Background Service…", action: #selector(installService), keyEquivalent: "")
+        installItem.target = self
+        menu.addItem(installItem)
+        uninstallItem = NSMenuItem(title: "Uninstall Background Service…", action: #selector(uninstallService), keyEquivalent: "")
+        uninstallItem.target = self
+        menu.addItem(uninstallItem)
         let test = NSMenuItem(title: "Test Sound", action: #selector(testSound), keyEquivalent: "")
         test.target = self
         menu.addItem(test)
@@ -102,6 +107,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(quit)
 
         statusItem.menu = menu
+        refreshServiceItems()
+    }
+
+    // True when the LaunchDaemon plist is present (world-readable, no privileges needed).
+    func serviceInstalled() -> Bool {
+        FileManager.default.fileExists(atPath: kDaemonPlist)
+    }
+
+    // Reflect install state in the menu: check + grey-out Install when present, and vice versa.
+    func refreshServiceItems() {
+        let installed = serviceInstalled()
+        installItem.state = installed ? .on : .off
+        installItem.isEnabled = !installed
+        uninstallItem.isEnabled = installed
+    }
+
+    // NSMenuDelegate — re-check just before the menu shows, in case the service
+    // was installed or removed outside the app.
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        refreshServiceItems()
     }
 
     // map g threshold (0.05 touchy .. 0.6 firm) to slider 0..1 (1 = touchy)
@@ -153,8 +178,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard let url = soundURL, let s = NSSound(contentsOf: url, byReference: true) else {
             NSSound.beep(); return
         }
-        let v = min(1.0, 0.4 + (strength - 0.05) * 0.5)
-        s.volume = Float(max(0.4, v))
+        // always play at full volume — slap intensity shouldn't affect loudness
+        s.volume = 1.0
         liveSounds.append(s)
         liveSounds = liveSounds.filter { $0.isPlaying || $0 === s }
         s.play()
@@ -182,7 +207,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let err = Pipe(); task.standardError = err
         task.terminationHandler = { [weak self] proc in
             DispatchQueue.main.async {
-                if proc.terminationStatus == 0 { self?.alert(ok) }
+                if proc.terminationStatus == 0 { self?.refreshServiceItems(); self?.alert(ok) }
                 else {
                     let msg = String(data: err.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? "unknown error"
                     self?.alert("Failed: \(msg)")
