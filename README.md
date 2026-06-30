@@ -75,4 +75,3 @@ Reverse-engineered specifics that make this work:
   one sound; can be upgraded to STA/LTA / CUSUM voting if bumps false-trigger.
 - For local use the ad-hoc build is enough; distributing to others would need a
   paid Developer account to notarize.
-- `whip.mp3` is your own sound asset — swap in any mp3/wav/aiff.
