@@ -65,11 +65,8 @@ guard FileManager.default.fileExists(atPath: soundURL.path) else {
 var liveSounds: [NSSound] = []
 func playWhip(strength: Double) {
     guard let s = NSSound(contentsOf: soundURL, byReference: true) else { return }
-    if config.scaleVolume {
-        // map slap strength (threshold ... ~2g) to volume 0.4 ... 1.0
-        let v = min(1.0, 0.4 + (strength - config.sensitivity) * 0.5)
-        s.volume = Float(max(0.4, v))
-    }
+    // always play at full volume — slap intensity shouldn't affect loudness
+    s.volume = 1.0
     liveSounds.append(s)
     liveSounds = liveSounds.filter { $0.isPlaying || $0 === s }
     s.play()
